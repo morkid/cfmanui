@@ -1,0 +1,37 @@
+@import "bootstrap/scss/bootstrap.scss";
+
+.h-24p {
+  height: 24px;
+}
+
+.h-20p {
+  height: 20px;
+}
+
+.h-16p {
+  height: 16px;
+}
+
+.w-32p {
+  width: 32px;
+}
+
+.w-24p {
+  width: 24px;
+}
+
+.w-20p {
+  width: 20px;
+}
+
+.w-16p {
+  width: 16px;
+}
+
+.h-2r {
+  height: 2rem;
+}
+
+.w-24p {
+  width: 24px;
+}

@@ -1,0 +1,129 @@
+name: build
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v3
+      - name: Test UI
+        run: |
+          yarn install
+          yarn lint
+          yarn test
+      - name: Setup Go 1.20.8
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20.8'
+      - name: Test Server
+        run: |
+          go mod tidy
+          go test -v -coverprofile=cover.txt ./...
+      # - name: Update Coverage Badge
+      #   if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      #   uses: we-cli/coverage-badge-action@main
+  build-client:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v3
+      - name: Build UI
+        run: |
+          rm -rf dist
+          yarn install
+          yarn build
+      - name: Upload dist
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-files
+          path: dist
+  build-server:
+    runs-on: ubuntu-latest
+    needs: build-client
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Go 1.20.8
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.20.8'
+      - name: Cleanup old dist
+        run: rm -rf dist
+      - name: Download dist
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-files
+          path: dist
+      - name: Build binaries
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p bin/{linux/arm,windows,darwin}
+          go get -d -v
+          echo "Building linux/amd64"
+          GOOS=linux GOARCH=amd64 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/linux/amd64 ./cmd/cfmanui/main.go
+          echo "Building linux/386"
+          GOOS=linux GOARCH=386 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/linux/386 ./cmd/cfmanui/main.go
+          echo "Building linux/arm/v6"
+          GOOS=linux GOARCH=arm GOARM=6 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/linux/arm/v6 ./cmd/cfmanui/main.go
+          echo "Building linux/arm/v7"
+          GOOS=linux GOARCH=arm GOARM=7 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/linux/arm/v7 ./cmd/cfmanui/main.go
+          echo "Building linux/arm64"
+          GOOS=linux GOARCH=arm64 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/linux/arm64 ./cmd/cfmanui/main.go
+          echo "Building windows/amd64"
+          GOOS=windows GOARCH=amd64 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/windows/amd64.exe ./cmd/cfmanui/main.go
+          echo "Building windows/386"
+          GOOS=windows GOARCH=386 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/windows/386.exe ./cmd/cfmanui/main.go
+          echo "Building darwin/amd64"
+          GOOS=darwin GOARCH=amd64 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/darwin/amd64 ./cmd/cfmanui/main.go
+          echo "Building darwin/arm64"
+          GOOS=darwin GOARCH=arm64 go build -a -tags "netgo production" -ldflags '-s -w -extldflags "-static"' -o bin/darwin/arm64 ./cmd/cfmanui/main.go
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: bin-files
+          path: bin
+  build-image:
+    runs-on: ubuntu-latest
+    needs: build-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: olegtarasov/get-tag@v2.1.2
+        id: tagName
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/386,linux/arm/v7,linux/arm/v6,linux/arm64
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: bin-files
+          path: bin
+      - name: Fixing Permissions
+        run: |
+          chmod -R 755 bin
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/386,linux/arm/v7,linux/arm/v6,linux/arm64
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest,${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.tagName.outputs.tag }}
