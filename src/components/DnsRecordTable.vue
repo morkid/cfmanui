@@ -149,7 +149,7 @@ export default {
   },
   methods: {
     getPrefixName(dnsRecord) {
-      let escapePattern = dnsRecord.zone_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      let escapePattern = (dnsRecord.zone_name||'').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       let regex = new RegExp(`(\\.${escapePattern})$`)
       return dnsRecord.name.replace(regex, '')
     },
