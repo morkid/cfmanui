@@ -95,9 +95,9 @@ export default {
       try {
         let queryString = `?order=type&direction=asc&per_page=${this.perPage}&page=${this.page}`
         if (this.search && this.search.length > 0) {
-          queryString += `&name=${encodeURIComponent('contains:' + this.search)}`
-          queryString += `&content=${encodeURIComponent('contains:' + this.search)}`
-          queryString += `&type=${encodeURIComponent('contains:' + this.search)}`
+          queryString += `&name.contains=${encodeURIComponent(this.search)}`
+          queryString += `&content.contains=${encodeURIComponent(this.search)}`
+          queryString += `&type.contains=${encodeURIComponent(this.search)}`
           queryString += `&comment.contains=${encodeURIComponent(this.search)}`
           queryString += '&match=any'
         }
